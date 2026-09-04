@@ -902,17 +902,21 @@ impl Provider for OpenAIProvider {
     }
 
     fn set_reasoning_effort(&self, effort: &str) -> Result<()> {
-        let requested = effort.trim().to_ascii_lowercase();
-        if !requested.is_empty()
-            && jcode_provider_core::canonical_reasoning_effort(&requested).is_none()
-            && !jcode_base::prompt::is_swarm_effort(&requested)
-        {
+        let normalized = match Self::normalize_reasoning_effort(effort) {
+            Some(effort)
+                if jcode_provider_core::models::is_gpt_6_astra(&self.model())
+                    && matches!(effort.as_str(), "none" | "minimal") =>
+            {
+                Some("low".to_string())
+            }
+            effort => effort,
+        };
+        if !effort.trim().is_empty() && normalized.is_none() {
             anyhow::bail!(
                 "Unsupported OpenAI reasoning effort '{}'; expected none|minimal|low|medium|high|xhigh|max|swarm|swarm-deep",
                 effort
             );
         }
-        let normalized = Self::normalize_reasoning_effort(effort);
         if let Some(requested) = normalized.as_deref()
             && !jcode_base::prompt::is_swarm_effort(requested)
         {
@@ -930,16 +934,11 @@ impl Provider for OpenAIProvider {
                 );
             }
         }
-        match self.reasoning_effort.write() {
-            Ok(mut guard) => {
-                *guard = normalized;
-                Ok(())
-            }
-            Err(poisoned) => {
-                *poisoned.into_inner() = normalized;
-                Ok(())
-            }
-        }
+        *self
+            .reasoning_effort
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = normalized;
+        Ok(())
     }
 
     fn available_efforts(&self) -> Vec<&'static str> {
@@ -968,7 +967,7 @@ impl Provider for OpenAIProvider {
             efforts.extend(["swarm", "swarm-deep"]);
             return efforts;
         }
-        jcode_provider_core::OPENAI_SELECTABLE_EFFORTS.to_vec()
+        jcode_provider_core::inferred_reasoning_efforts(Some("openai"), Some(&model))
     }
 
     fn service_tier(&self) -> Option<String> {
@@ -1178,7 +1177,7 @@ impl Provider for OpenAIProvider {
 
     fn context_window(&self) -> usize {
         let model = self.model();
-        jcode_provider_core::context_limit_for_model_with_provider(&model, Some(self.name()))
+        jcode_base::provider::context_limit_for_model_with_provider(&model, Some(self.name()))
             .unwrap_or(jcode_provider_core::DEFAULT_CONTEXT_LIMIT)
     }
 

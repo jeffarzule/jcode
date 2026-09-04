@@ -1,0 +1,44 @@
+name: OpenAI harness
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    paths:
+      - "crates/jcode-provider-core/**"
+      - "crates/jcode-provider-openai*/**"
+      - "crates/jcode-base/src/provider/**"
+      - "crates/jcode-base/src/prompt/**"
+      - "crates/jcode-app-core/src/agent/**"
+      - "tests/astra_harness.rs"
+      - "scripts/test_modern_openai_harness.py"
+      - ".github/workflows/openai-harness.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CARGO_INCREMENTAL: "0"
+      RUSTUP_TOOLCHAIN: "1.91.0"
+      JCODE_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.91.0
+        with:
+          components: rust-src
+      - uses: Swatinem/rust-cache@v2
+      - name: Provider regression tests
+        run: cargo test --locked -p jcode-provider-core -p jcode-provider-openai -p jcode-provider-openai-runtime --lib --tests
+      - name: Session and context integration
+        run: cargo test --locked --no-default-features --test astra_harness
+      - name: Build CLI
+        run: cargo build --locked --no-default-features --bin jcode
+      - name: Isolated CLI tool round trip
+        run: python3 scripts/test_modern_openai_harness.py target/debug/jcode

@@ -227,6 +227,7 @@ include!("openai_tests/responses_input.rs");
 include!("openai_tests/transport_runtime.rs");
 include!("openai_tests/payloads.rs");
 include!("openai_tests/parsing_tools.rs");
+include!("openai_tests/modern_models.rs");
 
 /// Mirror of the Anthropic round-trip guard: the runtime-provider identity that
 /// `set_credential_mode` writes for OpenAI must decode back to the same mode so

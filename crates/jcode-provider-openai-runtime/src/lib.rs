@@ -1025,28 +1025,24 @@ impl OpenAIProvider {
     }
 
     fn revalidate_reasoning_effort(&self) {
-        let current = self
+        // Keep validation and migration atomic with user effort changes.
+        let mut effort = self
             .reasoning_effort
-            .read()
-            .map(|effort| effort.clone())
-            .unwrap_or_else(|poisoned| poisoned.into_inner().clone());
-        let Some(current) = current else {
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let Some(current) = effort.as_deref() else {
             return;
         };
-        if jcode_base::prompt::is_swarm_effort(&current)
-            || self.available_efforts().contains(&current.as_str())
-        {
+        let available = self.available_efforts();
+        if jcode_base::prompt::is_swarm_effort(current) || available.contains(&current) {
             return;
         }
-        jcode_base::logging::info(&format!(
-            "Clearing OpenAI reasoning effort '{}' because model '{}' does not advertise it",
-            current,
-            self.model()
-        ));
-        match self.reasoning_effort.write() {
-            Ok(mut effort) => *effort = None,
-            Err(poisoned) => *poisoned.into_inner() = None,
-        }
+        let replacement = (jcode_provider_core::models::is_gpt_6_astra(&self.model())
+            && matches!(current, "none" | "minimal")
+            && available.contains(&"low"))
+        .then(|| "low".to_string());
+        jcode_base::logging::info(&format!("OpenAI effort: {current} -> {replacement:?}"));
+        *effort = replacement;
     }
 
     /// Translate a stored reasoning effort into the value sent to the API.
@@ -1205,6 +1201,7 @@ impl OpenAIProvider {
         prompt_cache_retention: Option<&str>,
         native_compaction_threshold: Option<usize>,
     ) -> Value {
+        let modern_model = jcode_provider_core::models::supports_prompt_cache_options(model_id);
         let mut tools = api_tools.to_vec();
         // The hosted `image_generation` tool is only available to general
         // ChatGPT/GPT models on the Responses backend. Codex models
@@ -1219,7 +1216,7 @@ impl OpenAIProvider {
             "input": input,
             "tools": tools,
             "tool_choice": "auto",
-            "parallel_tool_calls": false,
+            "parallel_tool_calls": modern_model,
             "stream": true,
             "store": false,
             "include": ["reasoning.encrypted_content"],
@@ -1250,7 +1247,9 @@ impl OpenAIProvider {
             if let Some(key) = prompt_cache_key {
                 request["prompt_cache_key"] = serde_json::json!(key);
             }
-            if let Some(retention) =
+            if modern_model {
+                request["prompt_cache_options"] = serde_json::json!({ "ttl": "30m" });
+            } else if let Some(retention) =
                 Self::effective_prompt_cache_retention(model_id, prompt_cache_retention)
             {
                 request["prompt_cache_retention"] = serde_json::json!(retention);
@@ -1283,6 +1282,7 @@ impl OpenAIProvider {
                         let mut w = self.model.write().await;
                         *w = fallback.clone();
                     }
+                    self.revalidate_reasoning_effort();
                     self.clear_persistent_ws(
                         "automatic OpenAI model fallback changed the response chain",
                     )

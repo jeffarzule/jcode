@@ -95,9 +95,67 @@ pub const ALL_OPENAI_MODELS: &[&str] = &[
     "gpt-5",
 ];
 
+/// Match Astra and its dated snapshots without assuming every GPT-6 model
+/// has the same reasoning or context limits.
+pub fn is_gpt_6_astra(model: &str) -> bool {
+    let model = crate::model_id::canonical(crate::model_id::slash_base(model.trim()));
+    model == "gpt-6-astra" || model.starts_with("gpt-6-astra-")
+}
+
+/// Verified families using `prompt_cache_options.ttl` instead of the legacy
+/// `prompt_cache_retention` field. Keep unknown models on their existing path.
+pub fn supports_prompt_cache_options(model: &str) -> bool {
+    let model = crate::model_id::canonical(crate::model_id::slash_base(model.trim()));
+    model == "gpt-5.6" || model.starts_with("gpt-5.6-") || is_gpt_6_astra(&model)
+}
+
 #[cfg(test)]
 mod gpt_5_6_catalog_tests {
     use super::*;
+
+    #[test]
+    fn cache_capabilities_match_known_families_and_snapshots() {
+        for model in [
+            "gpt-5.6",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-6-astra",
+            "gpt-6-astra-2026-09-04",
+            " OpenAI/GPT-6-Astra ",
+        ] {
+            assert!(supports_prompt_cache_options(model), "{model}");
+        }
+        for model in [
+            "gpt-5.5",
+            "gpt-5.60",
+            "gpt-6-unknown",
+            "gpt-6-astral",
+            "claude-opus-5",
+        ] {
+            assert!(!supports_prompt_cache_options(model), "{model}");
+        }
+        assert!(!is_gpt_6_astra("gpt-6-astral"));
+        assert!(!is_gpt_6_astra("gpt-5.6-sol"));
+    }
+
+    #[test]
+    fn astra_context_uses_documented_limit_unless_the_catalog_overrides_it() {
+        for model in [
+            "gpt-6-astra",
+            "gpt-6-astra-2026-09-04",
+            "openai/gpt-6-astra",
+        ] {
+            assert_eq!(context_limit_for_model(model), Some(1_050_000));
+            assert_eq!(
+                context_limit_for_model_with_provider_and_cache(model, Some("openai"), |_| {
+                    Some(272_000)
+                }),
+                Some(272_000),
+                "account-specific limits must win over static model metadata"
+            );
+        }
+    }
 
     #[test]
     fn openai_catalog_exposes_the_complete_gpt_5_6_family() {
@@ -271,6 +329,11 @@ pub fn context_limit_for_model_with_provider_and_cache(
     // GPT-named models with different context windows). See issue #541.
     if let Some(limit) = cached_context_limit(model) {
         return Some(limit);
+    }
+
+    // https://developers.openai.com/api/docs/models/gpt-6-astra
+    if is_gpt_6_astra(model) {
+        return Some(1_050_000);
     }
 
     // Spark variant has a smaller context window than the full codex model.

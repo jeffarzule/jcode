@@ -2971,16 +2971,13 @@ pub fn cache_ttl_for_provider_model(provider: &str, model: Option<&str>) -> Opti
         } else {
             300
         }),
-        "openai" => {
-            if model
-                .map(openai::supports_extended_prompt_cache_retention)
-                .unwrap_or(false)
-            {
-                Some(24 * 60 * 60)
-            } else {
-                Some(300)
+        "openai" => Some(match model {
+            Some(model) if jcode_provider_core::models::supports_prompt_cache_options(model) => {
+                30 * 60
             }
-        }
+            Some(model) if openai::supports_extended_prompt_cache_retention(model) => 24 * 60 * 60,
+            _ => 300,
+        }),
         "openrouter" => Some(300),
         "jcode subscription" => Some(300),
         "gemini" => Some(300),
