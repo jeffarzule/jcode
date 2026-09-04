@@ -140,11 +140,18 @@ mod gpt_5_6_catalog_tests {
     }
 
     #[test]
-    fn astra_context_uses_documented_limit_unless_the_catalog_overrides_it() {
+    fn modern_openai_context_uses_documented_limits_unless_the_catalog_overrides_it() {
         for model in [
             "gpt-6-astra",
             "gpt-6-astra-2026-09-04",
             "openai/gpt-6-astra",
+            "gpt-5.6",
+            "gpt-5.6-sol",
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.6-sol-2026-07-09",
+            "openai/gpt-5.6-terra",
+            "OpenAI/GPT-5.6-Luna",
         ] {
             assert_eq!(context_limit_for_model(model), Some(1_050_000));
             assert_eq!(
@@ -155,6 +162,15 @@ mod gpt_5_6_catalog_tests {
                 "account-specific limits must win over static model metadata"
             );
         }
+        for model in ["gpt-5.5", "gpt-5.60", "gpt-5.6-solarium", "gpt-5.6-unknown"] {
+            assert_eq!(context_limit_for_model(model), Some(272_000), "{model}");
+        }
+        assert_eq!(
+            context_limit_for_model_with_provider_and_cache("gpt-5.6-sol", Some("copilot"), |_| {
+                None
+            }),
+            Some(128_000)
+        );
     }
 
     #[test]
@@ -332,7 +348,14 @@ pub fn context_limit_for_model_with_provider_and_cache(
     }
 
     // https://developers.openai.com/api/docs/models/gpt-6-astra
-    if is_gpt_6_astra(model) {
+    // https://developers.openai.com/api/docs/models/gpt-5.6-sol (also Terra/Luna)
+    let gpt_5_6_tier = model
+        .strip_prefix("gpt-5.6-")
+        .and_then(|suffix| suffix.split('-').next());
+    if is_gpt_6_astra(model)
+        || model == "gpt-5.6"
+        || matches!(gpt_5_6_tier, Some("sol" | "terra" | "luna"))
+    {
         return Some(1_050_000);
     }
 

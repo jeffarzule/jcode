@@ -93,7 +93,7 @@ pub fn inferred_reasoning_efforts(
             .collect()
     };
     if provider.contains("openai-compatible") {
-        return if is_openai_model {
+        return if is_openai_model || is_astra {
             openai_efforts()
         } else {
             Vec::new()
@@ -147,6 +147,8 @@ mod tests {
             ("codex", "GPT-6-Astra"),
             ("openai", "gpt-6-astra-2026-09-04"),
             ("openai-compatible:custom", "gpt-6-astra"),
+            ("openai-compatible:custom", "openai/gpt-6-astra"),
+            ("openai-compatible:custom", "OpenAI/GPT-6-Astra-2026-09-04"),
         ] {
             assert_eq!(
                 inferred_reasoning_efforts(Some(provider), Some(model)),

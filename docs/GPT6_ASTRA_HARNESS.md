@@ -19,8 +19,9 @@ request behavior until their capabilities are verified.
   `minimal` settings migrate to `low`, including saved sessions and model
   switches. Supported explicit effort choices are preserved. jcode's `swarm`
   modes continue to use the highest effort advertised for the selected model.
-- Astra's documented context fallback is 1,050,000 tokens. Cached endpoint or
-  account limits take precedence, including the agent's compaction budget.
+- Astra and GPT-5.6 Sol, Terra, and Luna use their documented 1,050,000-token
+  context fallback. Cached endpoint or account limits take precedence,
+  including the agent's compaction budget.
 - The system prompt emphasizes finishing authorized work, bounded verification,
   concise context, independent read batching, and retaining the original task
   when the user adds corrections.
@@ -78,6 +79,9 @@ representative tasks; no benchmark improvement is claimed here.
 Checked against OpenAI documentation on September 4, 2026:
 
 - [GPT-6 Astra model](https://developers.openai.com/api/docs/models/gpt-6-astra)
+- [GPT-5.6 Sol model](https://developers.openai.com/api/docs/models/gpt-5.6-sol)
+- [GPT-5.6 Terra model](https://developers.openai.com/api/docs/models/gpt-5.6-terra)
+- [GPT-5.6 Luna model](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
 - [Latest model guide](https://developers.openai.com/api/docs/guides/latest-model)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
 - [Parallel function calling](https://developers.openai.com/api/docs/guides/function-calling#parallel-function-calling)
