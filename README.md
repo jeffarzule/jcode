@@ -755,6 +755,7 @@ Notes:
 - [jcode.sh/swarm](https://jcode.sh/swarm) — many coding agents in one repository
 - [jcode.sh/sdk](https://jcode.sh/sdk) — TypeScript SDK: drive jcode sessions from your own program
 - [jcode.sh/bench](https://jcode.sh/bench) — benchmark methodology and results
+- [GPT-6 Astra and GPT-5.6 Harness](docs/GPT6_ASTRA_HARNESS.md)
 - [Ambient Mode / OpenClaw](docs/AMBIENT_MODE.md)
 - [Browser Provider Protocol](docs/BROWSER_PROVIDER_PROTOCOL.md)
 - [Memory Architecture](docs/MEMORY_ARCHITECTURE.md)

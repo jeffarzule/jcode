@@ -84,9 +84,17 @@ pub fn inferred_reasoning_efforts(
         || model.starts_with("o3")
         || model.starts_with("o4")
         || model.starts_with("o5");
+    let is_astra = crate::models::is_gpt_6_astra(&model);
+    let openai_efforts = || {
+        OPENAI_SELECTABLE_EFFORTS
+            .iter()
+            .copied()
+            .filter(|effort| !is_astra || !matches!(*effort, "none" | "minimal"))
+            .collect()
+    };
     if provider.contains("openai-compatible") {
-        return if is_openai_model {
-            OPENAI_SELECTABLE_EFFORTS.to_vec()
+        return if is_openai_model || is_astra {
+            openai_efforts()
         } else {
             Vec::new()
         };
@@ -113,7 +121,7 @@ pub fn inferred_reasoning_efforts(
 
     let is_openai = provider.contains("openai") || provider.contains("codex") || is_openai_model;
     if is_openai {
-        return OPENAI_SELECTABLE_EFFORTS.to_vec();
+        return openai_efforts();
     }
 
     Vec::new()
@@ -122,6 +130,33 @@ pub fn inferred_reasoning_efforts(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn astra_efforts_exclude_unsupported_non_reasoning_modes() {
+        let expected = vec![
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+            "swarm",
+            "swarm-deep",
+        ];
+        for (provider, model) in [
+            ("openai", "gpt-6-astra"),
+            ("codex", "GPT-6-Astra"),
+            ("openai", "gpt-6-astra-2026-09-04"),
+            ("openai-compatible:custom", "gpt-6-astra"),
+            ("openai-compatible:custom", "openai/gpt-6-astra"),
+            ("openai-compatible:custom", "OpenAI/GPT-6-Astra-2026-09-04"),
+        ] {
+            assert_eq!(
+                inferred_reasoning_efforts(Some(provider), Some(model)),
+                expected,
+                "{provider}/{model} must expose Astra's supported efforts"
+            );
+        }
+    }
 
     #[test]
     fn provider_ladders_preserve_distinct_max_semantics() {

@@ -395,7 +395,7 @@ fn test_build_response_request_omits_long_context_for_plain_gpt_5_4() {
 }
 
 #[test]
-fn test_build_response_request_defaults_extended_cache_retention_for_gpt_5_6() {
+fn test_build_response_request_uses_current_cache_options_for_gpt_5_6() {
     let request = build_test_response_request(
         "gpt-5.6-sol",
         false,
@@ -407,7 +407,8 @@ fn test_build_response_request_defaults_extended_cache_retention_for_gpt_5_6() {
         None,
     );
 
-    assert_eq!(request["prompt_cache_retention"], serde_json::json!("24h"));
+    assert!(request.get("prompt_cache_retention").is_none());
+    assert_eq!(request["prompt_cache_options"], serde_json::json!({"ttl": "30m"}));
 }
 
 #[test]
@@ -453,7 +454,11 @@ fn test_build_response_request_respects_configured_cache_retention() {
 fn test_openai_cache_ttl_is_model_aware() {
     assert_eq!(
         jcode_base::provider::cache_ttl_for_provider_model("openai", Some("gpt-5.6-sol")),
-        Some(24 * 60 * 60)
+        Some(30 * 60)
+    );
+    assert_eq!(
+        jcode_base::provider::cache_ttl_for_provider_model("openai", Some("gpt-6-astra")),
+        Some(30 * 60)
     );
     assert_eq!(
         jcode_base::provider::cache_ttl_for_provider_model("openai", Some("gpt-5.5")),

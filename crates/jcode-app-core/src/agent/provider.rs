@@ -115,6 +115,7 @@ impl Agent {
         self.session.model = Some(self.provider_model());
         let event = crate::provider::ProviderStateEvent::selected_model(source, resolved_model);
         self.provider_runtime_state.apply(event);
+        self.sync_reasoning_effort_from_provider();
         self.refresh_compaction_budget();
         self.persist_session_best_effort("route selection");
         self.log_env_snapshot("set_route_selection");
@@ -144,6 +145,7 @@ impl Agent {
         self.session.model = Some(self.provider_model());
         let event = crate::provider::ProviderStateEvent::selected_model(source, resolved_model);
         self.provider_runtime_state.apply(event);
+        self.sync_reasoning_effort_from_provider();
         self.refresh_compaction_budget();
         self.persist_session_best_effort("model selection");
         self.log_env_snapshot("set_model");
@@ -159,16 +161,23 @@ impl Agent {
     }
 
     pub fn restore_reasoning_effort_from_session(&mut self) {
-        if let Some(effort) = self.session.reasoning_effort.clone() {
-            if let Err(e) = self.provider.set_reasoning_effort(&effort) {
+        let saved = self.session.reasoning_effort.clone();
+        if let Some(effort) = saved.as_deref() {
+            if let Err(e) = self.provider.set_reasoning_effort(effort) {
                 crate::logging::error(&format!(
                     "Failed to restore session reasoning effort '{}': {}",
                     effort, e
                 ));
             }
-        } else {
-            self.session.reasoning_effort = self.provider.reasoning_effort();
         }
+        self.sync_reasoning_effort_from_provider();
+        if self.session.reasoning_effort != saved {
+            self.persist_session_best_effort("reasoning effort restoration");
+        }
+    }
+
+    fn sync_reasoning_effort_from_provider(&mut self) {
+        self.session.reasoning_effort = self.provider.reasoning_effort();
         // Mirror the effort into the deadlock-free side-table so server handlers
         // (e.g. the swarm seed handler) can learn this session's effort without
         // taking the agent lock.
@@ -180,13 +189,10 @@ impl Agent {
 
     pub fn set_reasoning_effort(&mut self, effort: &str) -> Result<Option<String>> {
         self.provider.set_reasoning_effort(effort)?;
-        let current = self.provider.reasoning_effort();
-        self.session.reasoning_effort = current.clone();
-        // Keep the side-table in sync (see `restore_reasoning_effort_from_session`).
-        crate::session_effort::record_session_effort(&self.session.id, current.as_deref());
+        self.sync_reasoning_effort_from_provider();
         self.log_env_snapshot("set_reasoning_effort");
         self.session.save()?;
-        Ok(current)
+        Ok(self.session.reasoning_effort.clone())
     }
 
     pub fn subagent_model(&self) -> Option<String> {
